@@ -1,0 +1,466 @@
+      renderResults(v);
+      // تنبؤي في الأعلى أيضاً
+      if(v.length>=1){
+        let f=v.toLowerCase();
+        let sug=cities.filter(c=>c.name.toLowerCase().includes(f)).slice(0,5);
+        if(sug.length>0){
+          suggestBox.innerHTML=sug.map(c=>`<div class="city-suggest-item" data-code="${toWesternDigits(c.code)}">${c.name} - ${toWesternDigits(c.code)}</div>`).join('');
+          suggestBox.style.display='block';
+          suggestBox.querySelectorAll('.city-suggest-item').forEach(it=>{
+            it.addEventListener('click',()=>{
+              selectedCode=toWesternDigits(it.dataset.code);
+              searchInp.value=cities.find(x=>toWesternDigits(x.code)===selectedCode)?.name||'';
+              suggestBox.style.display='none';
+              renderResults(searchInp.value);
+            });
+          });
+        }else suggestBox.style.display='none';
+      }
+    });
+
+    document.getElementById('p-btn-toggle-edit').addEventListener('click',()=>{document.getElementById('p-edit-panel').classList.toggle('open');});
+    document.getElementById('p-btn-fill').addEventListener('click',()=>{
+      let cur=cities.find(c=>toWesternDigits(c.code)===toWesternDigits(selectedCode));
+      if(!cur){statusEl.textContent='اختر مدينة أولاً من القائمة';return;}
+      inpName.value=cur.name;inpCode.value=toWesternDigits(cur.code);statusEl.textContent='تم التعبئة - عدّل ثم اضغط إضافة للتعديل';
+    });
+    document.getElementById('p-btn-add').addEventListener('click',()=>{
+      let name=inpName.value.trim();let codeRaw=inpCode.value.trim();let code=toWesternDigits(codeRaw);
+      if(!name||!code){statusEl.textContent='أدخل الاسم والكود';return;}
+      if(!/^\d+$/.test(code)){statusEl.textContent='الكود يجب أن يكون أرقام فقط';return;}
+      let existingIdx=cities.findIndex(c=>toWesternDigits(c.code)===code);
+      let selIdx=cities.findIndex(c=>toWesternDigits(c.code)===toWesternDigits(selectedCode));
+      if(existingIdx!==-1 && toWesternDigits(cities[existingIdx].code)===code && selIdx===existingIdx){
+        // تعديل نفس المدينة
+        cities[existingIdx]={name,code};saveCities(cities);renderResults(searchInp.value.trim());statusEl.textContent='✅ تم التعديل: '+name+' - '+code;
+      }else if(existingIdx!==-1){
+        statusEl.textContent='الكود '+code+' موجود مسبقاً لمدينة أخرى';
+      }else{
+        cities.push({name,code});saveCities(cities);renderResults(searchInp.value.trim());selectedCode=code;statusEl.textContent='✅ تمت الإضافة: '+name+' - '+code;
+      }
+      inpName.value='';inpCode.value='';
+    });
+    document.getElementById('p-btn-del').addEventListener('click',()=>{
+      if(!selectedCode){statusEl.textContent='اختر مدينة';return;}
+      if(cities.length<=1){statusEl.textContent='لا يمكن حذف آخر مدينة';return;}
+      let cur=cities.find(c=>toWesternDigits(c.code)===toWesternDigits(selectedCode));
+      if(!confirm('حذف: '+(cur?cur.name:selectedCode)+' ؟'))return;
+      cities=cities.filter(c=>toWesternDigits(c.code)!==toWesternDigits(selectedCode));saveCities(cities);
+      if(toWesternDigits(getDef())===toWesternDigits(selectedCode))setDef(cities[0].code);
+      selectedCode=cities[0].code;renderResults(searchInp.value.trim());statusEl.textContent='🗑️ تم الحذف';
+    });
+
+    function close(){ov.remove();}
+    document.getElementById('p-close-city').onclick=close;
+    document.getElementById('p-btn-close2').onclick=close;
+    ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    document.getElementById('p-btn-save-def').onclick=()=>{
+      if(!selectedCode){statusEl.textContent='اختر مدينة من القائمة';return;}
+      setDef(toWesternDigits(selectedCode));close();setTimeout(()=>window.openPrayerSystem(),150);
+    };
+  }
+
+  function openPrayerModal(code,cached){
+    let old=document.getElementById('prayer-main-overlay');if(old)old.remove();
+    let cities=getCities();let cityObj=cities.find(c=>toWesternDigits(c.code)===toWesternDigits(code))||{name:code,code:code};
+    let td=fmtToday();
+    // إذا كان الكاش قديم (قبل التوحيد) نوحّده الآن
+    let rawHijri=(cached&&cached.data.hijri)||td.hijri;
+    let rawMiladi=(cached&&cached.data.miladi)||td.greg;
+    let hijriText=formatHijriUnified(rawHijri, td.dayName);
+    let miladiText=formatMiladiUnified(rawMiladi, td.dayName);
+
+    let ov=document.createElement('div');ov.id='prayer-main-overlay';ov.className='prayer-overlay';
+    ov.innerHTML=`
+      <div class="prayer-box">
+        <div class="prayer-head"><div style="font-weight:900;color:#d4af37;font-size:15px;display:flex;align-items:center;gap:8px"><span>🕌 مواقيت الصلاة</span><a id="p-source-icon" href="https://taqwimalsayegh.com/city/${toWesternDigits(code)}" target="_blank" title="المصدر" style="font-size:16px;text-decoration:none;cursor:pointer;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center">🔗</a></div><button id="p-close-main" style="background:#132a1a;border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:999px;width:32px;height:32px;cursor:pointer">✕</button></div>
+        <div class="prayer-body">
+          <div class="prayer-center-head">
+            <div class="prayer-center-city">${cityObj.name}</div>
+            <div class="prayer-center-hijri" id="p-center-hijri">${hijriText}</div>
+            <div class="prayer-center-miladi" id="p-center-miladi">${miladiText}</div>
+          </div>
+          <div id="p-status" class="prayer-status" style="display:${cached?'none':'block'}"><div style="font-size:20px">⏳</div>جاري جلب أحدث بيانات الصلاة...<br><span style="font-size:11px;opacity:0.8">قد تستغرق بعض الوقت</span><div style="margin-top:8px;height:4px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden"><div style="width:100%;height:100%;background:linear-gradient(90deg,#d4af37,#fff,#d4af37);background-size:200% 100%;animation:loadBar 1.2s infinite linear"></div></div></div>
+          <div id="p-cards">${cached? prayerDarkHTML(cached.data.prayers):''}</div>
+          <div style="background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.25);border-radius:8px;padding:10px 8px;text-align:center;color:#d4af37;font-size:12px;line-height:1.5;margin-top:12px">⚠️ نلفت انتباه جنابكم الى وجوب الاحتياط بضع دقائق..و شكرا</div>
+          <div class="sayegh-row" style="margin-top:12px"><button class="sayegh-btn primary" id="p-refresh" style="flex:1">🔄 تحديث</button><button class="sayegh-btn" id="p-change" style="flex:1">📍 حدد مدينتك</button></div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    let statusEl=document.getElementById('p-status');
+    let cardsEl=document.getElementById('p-cards');
+    let hijriEl=document.getElementById('p-center-hijri');
+    let miladiEl=document.getElementById('p-center-miladi');
+    function close(){ov.remove();}
+    document.getElementById('p-close-main').onclick=close;
+    // تم الغاء زر الاغلاق السفلي - الاكس فوق يكفي
+    ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    document.getElementById('p-change').onclick=()=>{close();setTimeout(()=>openCitySelector(code),100);};
+    document.getElementById('p-refresh').onclick=async()=>{
+      statusEl.style.display='block';statusEl.innerHTML='⏳ جاري التحديث...';
+      let r=await fetchPrayers(code);
+      if(r){cardsEl.innerHTML=prayerDarkHTML(r.prayers);hijriEl.textContent=r.hijri;miladiEl.textContent=r.miladi+' م';statusEl.textContent='✅ تم التحديث';setTimeout(()=>statusEl.style.display='none',1000);}
+      else statusEl.textContent='❌ فشل التحديث';
+    };
+    if(!cached){
+      (async()=>{
+        let r=await fetchPrayers(code);
+        let still=document.getElementById('prayer-main-overlay');
+        if(still&&r){let c=document.getElementById('p-cards');if(c)c.innerHTML=prayerDarkHTML(r.prayers);let h=document.getElementById('p-center-hijri');if(h)h.textContent=r.hijri;let m=document.getElementById('p-center-miladi');if(m)m.textContent=r.miladi+' م';let s=document.getElementById('p-status');if(s){s.textContent='✅ تم الحفظ';setTimeout(()=>s.style.display='none',800);}}
+      })();
+    }
+  }
+
+  window.openPrayerSystem=function(){
+    let def=getDef();if(!def){openCitySelector(null);return;}
+    let cache=getCache(def);openPrayerModal(def,cache);
+  };
+  try{
+    let obs=new MutationObserver(()=>{
+      document.querySelectorAll('button').forEach(b=>{
+        if(b.textContent&&b.textContent.includes('🕌')&&!b._prayerBound){
+          b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();window.openPrayerSystem();});
+          b._prayerBound=true;
+        }
+      });
+    });
+    obs.observe(document.body,{childList:true,subtree:true});
+    setTimeout(()=>{document.querySelectorAll('button').forEach(b=>{if(b.textContent&&b.textContent.includes('🕌')&&!b._prayerBound){b.onclick=e=>{e.preventDefault();window.openPrayerSystem();};b._prayerBound=true;}});},800);
+  }catch(e){}
+  console.log('✅ V5 - بدون سيلكت + تحويل أرقام هندية');
+})();
+</script>
+
+
+<!-- PRAYER AUTO FETCH 00:05 GMT -->
+<script>
+(function(){
+  var CITY_KEY='_prayer_default_city_v3';
+  var CACHE_PREFIX='_prayer_cache_v3_';
+  var AUTO_LAST_KEY_PREFIX='_prayer_auto_gmt_last_';
+  var fetchingAuto=false;
+  function getCityCode(){try{return localStorage.getItem(CITY_KEY);}catch(e){return null;}}
+  function todayKeyLocal(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+  function todayKeyGMT(){var d=new Date();return d.getUTCFullYear()+'-'+(d.getUTCMonth()+1)+'-'+d.getUTCDate();}
+  function toWestern(s){if(s==null) return s;var map={"٠":"0","١":"1","٢":"2","٣":"3","٤":"4","٥":"5","٦":"6","٧":"7","٨":"8","٩":"9","۰":"0","۱":"1","۲":"2","۳":"3","۴":"4","۵":"5","۶":"6","۷":"7","۸":"8","۹":"9"};return String(s).replace(/[٠-٩۰-۹]/g,function(m){return map[m]||m;});}
+  function setCacheAuto(code,data){try{var k=CACHE_PREFIX+toWestern(code)+'_'+todayKeyLocal();localStorage.setItem(k,JSON.stringify({data:data}));}catch(e){}}
+  async function fetchPrayersAuto(code){
+    if(fetchingAuto) return null;fetchingAuto=true;
+    try{
+      if(!window.fetchWith7ProxiesParallel || !window.parseHijriMiladi || !window.parsePrayerTimesReal) return null;
+      var url='https://taqwimalsayegh.com/city/'+toWestern(code);
+      var pageHtml=await window.fetchWith7ProxiesParallel(url);
+      if(!pageHtml) throw new Error('empty');
+      var parsed=window.parseHijriMiladi(pageHtml);
+      var pr=window.parsePrayerTimesReal(pageHtml);
+      var td=(window.fmtToday||function(){return {hijri:'',greg:'',dayName:''};})();
+      var hijriUnified=(window.formatHijriUnified||function(s){return s;})(parsed.hijri||td.hijri, td.dayName);
+      var miladiUnified=(window.formatMiladiUnified||function(s){return s;})(parsed.miladi||td.greg, td.dayName);
+      var res={hijri:hijriUnified,miladi:miladiUnified,prayers:pr, hijriRaw:parsed.hijri, miladiRaw:parsed.miladi};
+      setCacheAuto(toWestern(code),res);
+      try{localStorage.setItem(AUTO_LAST_KEY_PREFIX+todayKeyGMT(),'1');}catch(e){}
+      return res;
+    }catch(e){return null;}finally{fetchingAuto=false;}
+  }
+  function shouldFetchNowGMT(){
+    try{
+      var now=new Date();if(now.getUTCHours()!==0 || now.getUTCMinutes()!==5) return false;
+      var city=getCityCode();if(!city || String(city).trim()==='') return false;
+      if(localStorage.getItem(AUTO_LAST_KEY_PREFIX+todayKeyGMT())==='1') return false;
+      return true;
+    }catch(e){return false;}
+  }
+  function checkAndFetch(){if(shouldFetchNowGMT()){var code=getCityCode();if(code) fetchPrayersAuto(code);}}
+  function checkAndFetchBackground(){
+    try{
+      var city=getCityCode(); if(!city) return;
+      // في الخلفية: اجلب إذا لم نجلب اليوم
+      if(localStorage.getItem(AUTO_LAST_KEY_PREFIX+todayKeyGMT())!=='1'){
+        fetchPrayersAuto(city);
+      }
+    }catch(e){}
+  }
+  function startGMTScheduler(){checkAndFetch();setInterval(checkAndFetch,60000);}
+  function initAuto(){var tries=0;var iv=setInterval(function(){tries++;if(window.fetchWith7ProxiesParallel && window.parsePrayerTimesReal){clearInterval(iv);startGMTScheduler();}if(tries>60) clearInterval(iv);},1000);}
+  // Expose for APK background
+  window.fetchPrayersAuto = fetchPrayersAuto;
+  window.checkAndFetchBackgroundPrayer = checkAndFetchBackground;
+  window.getPrayerCityCode = getCityCode;
+  if(document.readyState==='complete'){setTimeout(initAuto,2000);} else {window.addEventListener('load', function(){setTimeout(initAuto,2000);});}
+})();
+</script>
+
+
+<script>
+// === APK NOTIFICATION + BACKGROUND PATCH ===
+(function(){
+  window.isNativeAPK = function(){ try{ return window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform(); }catch(e){ return false; } };
+  window.ensureNotifChannel = async function(){
+    try{
+      if(!window.isNativeAPK()) return;
+      const { LocalNotifications } = Capacitor.Plugins;
+      await LocalNotifications.createChannel({id:"taqweem-reminders",name:"تذكيرات التقويم",description:"تذكير قبل يوم ويومين",importance:5,visibility:1,sound:"default",vibration:true,lights:true});
+      await LocalNotifications.createChannel({id:"taqweem-updates",name:"تحديثات التاريخ",description:"تحديث تلقائي",importance:4,visibility:1,sound:"default"});
+    }catch(e){ console.log("channel error", e); }
+  };
+  window.apkNotify = async function(title, body, id){
+    try{
+      if(window.isNativeAPK()){
+        const { LocalNotifications } = Capacitor.Plugins;
+        await window.ensureNotifChannel();
+        await LocalNotifications.schedule({notifications:[{id:id||Math.floor(Math.random()*100000),title:title,body:body,channelId:"taqweem-reminders",smallIcon:"ic_launcher",sound:"default"}]});
+      }else{
+        if("Notification" in window && Notification.permission==="granted"){ new Notification(title,{body:body}); }
+      }
+    }catch(e){ console.log("notify err",e); }
+  };
+  if(document.readyState==="complete") setTimeout(window.ensureNotifChannel,2000);
+  else window.addEventListener('load', function(){ setTimeout(window.ensureNotifChannel,2000); });
+  // Background fetch init
+  async function initBg(){
+    try{
+      if(!window.isNativeAPK()) return;
+      const { BackgroundFetch } = Capacitor.Plugins;
+      if(!BackgroundFetch) return;
+      await BackgroundFetch.configure({minimumFetchInterval:15,stopOnTerminate:false,startOnBoot:true,enableHeadless:true}, async ()=>{
+        try{
+          // ===== منطق الأيام =====
+          var hd = 1;
+          try{
+            var fin = window.FINAL_HIJRI || JSON.parse(localStorage.getItem('_final_unified')||'{}');
+            if(fin && fin.hd) hd = parseInt(fin.hd);
+          }catch(e){}
+          var now = new Date();
+          var devHour = now.getHours();
+          var devDateKey = now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();
+          var gmtDateKey = now.getUTCFullYear()+'-'+(now.getUTCMonth()+1)+'-'+now.getUTCDate();
+
+          // ===== 1- أوقات الصلاة: مرة وحدة بالنهار 00:05 GMT =====
+          try{
+            if(typeof window.checkAndFetchBackgroundPrayer==='function'){
+              await window.checkAndFetchBackgroundPrayer();
+            } else if(typeof window.fetchPrayersAuto==='function' && typeof window.getPrayerCityCode==='function'){
+              var c = window.getPrayerCityCode();
+              if(c && localStorage.getItem('_prayer_auto_gmt_last_'+gmtDateKey)!=='1'){
+                await window.fetchPrayersAuto(c);
+              }
+            }
+          }catch(e){ console.log('prayer bg err',e); }
+
+          // ===== 2- التحديث الحي =====
+          var isIntensiveDay = (hd===28 || hd===29 || hd===30);
+          var isIntensiveHour = (devHour>=16 && devHour<=23);
+          var shouldFetchLive = false;
+
+          if(hd===1){
+            // الشهر انقلب - وقف التكثيف، ارجع للوضع العادي مرة بالنهار
+            var lastDaily = localStorage.getItem('_live_daily_last_'+devDateKey);
+            if(!lastDaily) shouldFetchLive = true;
+          } else if(isIntensiveDay && isIntensiveHour){
+            // أيام الرؤية 28-30 من 4 العصر للـ 11 ليلا بتوقيت الجهاز - كل نص ساعة
+            var half = now.getMinutes() < 30 ? '00' : '30';
+            var slotKey = devDateKey+'-'+devHour+'-'+half;
+            var lastSlot = localStorage.getItem('_live_intensive_last_slot');
+            if(lastSlot !== slotKey){
+              shouldFetchLive = true;
+              // احفظ السلوت الحالي بعد الجلب
+              try{ localStorage.setItem('_live_intensive_last_slot', slotKey); }catch(e){}
+            }
+          } else {
+            // أيام عادية 1-27 أو خارج وقت التكثيف - مرة وحدة بالنهار
+            var lastDaily2 = localStorage.getItem('_live_daily_last_'+devDateKey);
+            if(!lastDaily2) shouldFetchLive = true;
+          }
+
+          if(shouldFetchLive){
+            if(typeof window.autoFetchActiveBoxGlobal==='function') {
+              try{ await window.autoFetchActiveBoxGlobal('⏰ خلفية APK - '+(isIntensiveDay && isIntensiveHour ? 'تكثيف رؤية' : 'يومي')); }catch(e){}
+            }
+            // احفظ أننا جبنا اليوم (للوضع العادي)
+            if(!(isIntensiveDay && isIntensiveHour)){
+              try{ localStorage.setItem('_live_daily_last_'+devDateKey,'1'); }catch(e){}
+            }
+          }
+
+          // ===== 3- تذكيرات =====
+          if(typeof window.qaGlobal==='function') try{ window.qaGlobal(); }catch(e){}
+          window.dispatchEvent(new Event('taqweem_bg_fetch'));
+        }catch(e){ console.log('bg fetch err',e); }
+        BackgroundFetch.finish();
+      });
+      console.log("BackgroundFetch configured");
+    }catch(e){ console.log("bg err",e); }
+  }
+  setTimeout(initBg,3000);
+  // Patch Notification to use apkNotify too
+  setTimeout(function(){
+    if(window.isNativeAPK() && !window._notifPatched){
+      window._notifPatched=true;
+      const Orig=window.Notification;
+      window.Notification=function(t,o){
+        try{ window.apkNotify(t, o&&o.body?o.body:"", Math.floor(Math.random()*10000)); }catch(e){}
+        try{ if(Orig && Notification.permission==="granted") return new Orig(t,o); }catch(e){}
+        return {close:function(){}};
+      };
+      try{ window.Notification.permission = Orig?Orig.permission:"granted"; window.Notification.requestPermission = Orig?Orig.requestPermission.bind(Orig):function(){return Promise.resolve("granted");}; }catch(e){}
+    }
+  },2500);
+})();
+</script>
+
+<script>
+// === FIX: تصدير بطاقة الشبكة + تحسين تصدير بطاقة اليوم للـ APK ===
+(function(){
+  window.exportNetworkCardAPK = async function(){
+    try{
+      var card = document.querySelector('[data-network-card]') || document.getElementById('network-card') || document.querySelector('.network-card');
+      if(!card){
+        // ابحث عن البطاقة في الصفحة
+        var all = document.querySelectorAll('[class*="network"], [class*="Network"]');
+        for(var i=0;i<all.length;i++){ if(all[i].innerText && all[i].innerText.includes('بطاقة')){ card = all[i]; break; } }
+      }
+      if(!card){ alert('بطاقة الشبكة غير ظاهرة حاليا'); return; }
+      // استخدم html2canvas إذا موجود، وإلا استخدم canvas يدوي
+      var canvas;
+      if(window.html2canvas){
+        canvas = await window.html2canvas(card, {scale:2, useCORS:true, backgroundColor:'#0a1f14'});
+      }else{
+        // fallback: إنشاء canvas مشابه لبطاقة اليوم
+        var g=1080, L=1350;
+        var F=document.createElement('canvas'); F.width=g; F.height=L;
+        var P=F.getContext('2d');
+        var grad=P.createLinearGradient(0,0,0,L);
+        grad.addColorStop(0,'#0a1f14'); grad.addColorStop(0.5,'#132a1a'); grad.addColorStop(1,'#1a3a2a');
+        P.fillStyle=grad; P.fillRect(0,0,g,L);
+        P.strokeStyle='#d4af37'; P.lineWidth=8; P.strokeRect(24,24,g-48,L-48);
+        // نص البطاقة
+        P.fillStyle='#fff'; P.font='bold 48px Tajawal'; P.textAlign='center';
+        var text = card.innerText.slice(0,500);
+        var lines = text.split('\n');
+        var y=200;
+        for(var li=0;li<Math.min(lines.length,20);li++){ P.fillText(lines[li].slice(0,60), g/2, y); y+=60; }
+        canvas=F;
+      }
+      var blob = await new Promise(res=> canvas.toBlob(r=>res(r), 'image/png',1));
+      if(!blob){ alert('فشل إنشاء الصورة'); return; }
+      var fileName = 'taqweem-network-'+Date.now()+'.png';
+      if(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()){
+        const { Filesystem, Share } = Capacitor.Plugins;
+        let base64 = await new Promise((resolve,reject)=>{
+          let reader=new FileReader();
+          reader.onloadend=()=>{ let d=reader.result; if(typeof d==='string') resolve(d.split(',')[1]); else reject('no data'); };
+          reader.onerror=reject;
+          reader.readAsDataURL(blob);
+        });
+        let filePath = 'taqweem/'+fileName;
+        try{ await Filesystem.mkdir({path:'taqweem',directory:'CACHE',recursive:true}); }catch(e){}
+        await Filesystem.writeFile({path:filePath,data:base64,directory:'CACHE'});
+        let uriResult = await Filesystem.getUri({path:filePath,directory:'CACHE'});
+        await Share.share({title:'بطاقة يوم الشبكة',text:'بطاقة يوم الشبكة - التقويم الشامل',url:uriResult.uri,dialogTitle:'مشاركة بطاقة الشبكة'});
+      }else{
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a'); a.href=url; a.download=fileName; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }
+    }catch(e){ console.error(e); alert('خطأ في تصدير بطاقة الشبكة: '+e.message); }
+  };
+  // ربط تلقائي بزر تصدير الشبكة إذا موجود
+  setInterval(function(){
+    try{
+      var btns = document.querySelectorAll('button');
+      btns.forEach(function(b){
+        if(b._networkBound) return;
+        var t = (b.textContent||'').toLowerCase();
+        if(t.includes('تصدير') && (t.includes('شبكة') || b.closest('[data-network-card]') || b.id.includes('network'))){
+          b._networkBound=true;
+          b.addEventListener('click', function(e){
+            if(window.isNativeAPK && window.isNativeAPK()){
+              e.preventDefault(); e.stopPropagation();
+              window.exportNetworkCardAPK();
+            }
+          });
+        }
+      });
+    }catch(e){}
+  },1500);
+  console.log('✅ FIX: تصدير بطاقة الشبكة + خلفية الصلاة جاهز');
+})();
+</script>
+
+
+<script>
+// === FIX: منطق التكثيف للواجهة الأمامية (مرة بالنهار + 28-30 كل نص ساعة 16-23 بتوقيت الجهاز) ===
+(function(){
+  function getHd(){
+    try{
+      var fin = window.FINAL_HIJRI || JSON.parse(localStorage.getItem('_final_unified')||'{}');
+      if(fin && fin.hd) return parseInt(fin.hd);
+    }catch(e){}
+    return 1;
+  }
+  function shouldFetchLiveForeground(){
+    var hd = getHd();
+    var now = new Date();
+    var devHour = now.getHours();
+    var devDateKey = now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();
+    var isIntensiveDay = (hd===28 || hd===29 || hd===30);
+    var isIntensiveHour = (devHour>=16 && devHour<=23);
+    if(hd===1){
+      return !localStorage.getItem('_live_daily_last_'+devDateKey);
+    }else if(isIntensiveDay && isIntensiveHour){
+      var half = now.getMinutes() < 30 ? '00' : '30';
+      var slotKey = devDateKey+'-'+devHour+'-'+half;
+      var lastSlot = localStorage.getItem('_live_intensive_last_slot_fg');
+      if(lastSlot !== slotKey){
+        try{ localStorage.setItem('_live_intensive_last_slot_fg', slotKey); }catch(e){}
+        return true;
+      }
+      return false;
+    }else{
+      return !localStorage.getItem('_live_daily_last_'+devDateKey);
+    }
+  }
+  // Wrap autoFetchActiveBoxGlobal to respect daily logic
+  var origAutoFetch = null;
+  var tries=0;
+  var iv=setInterval(function(){
+    tries++;
+    if(window.autoFetchActiveBoxGlobal && !origAutoFetch){
+      origAutoFetch = window.autoFetchActiveBoxGlobal;
+      window.autoFetchActiveBoxGlobal = async function(reason){
+        try{
+          var hd = getHd();
+          var now = new Date();
+          var devDateKey = now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();
+          var isIntensiveDay = (hd===28 || hd===29 || hd===30);
+          var isIntensiveHour = (now.getHours()>=16 && now.getHours()<=23);
+          // تحقق من المنطق
+          var isIntensive = isIntensiveDay && isIntensiveHour;
+          if(!isIntensive){
+            // وضع عادي - إذا جبنا اليوم لا تعيد إلا إذا السبب تكثيف
+            if(!reason || !reason.includes('تكثيف')){
+              if(localStorage.getItem('_live_daily_last_'+devDateKey) && !reason.includes('يدوي') && !reason.includes('⏰ خلفية')){
+                console.log('⏭️ تخطي جلب حي - تم الجلب اليوم');
+                return;
+              }
+            }
+          }
+          var res = await origAutoFetch(reason);
+          if(!isIntensive){
+            try{ localStorage.setItem('_live_daily_last_'+devDateKey,'1'); }catch(e){}
+          }
+          return res;
+        }catch(e){ console.log('autoFetch wrap err',e); try{ return await origAutoFetch(reason); }catch(e2){} }
+      };
+      console.log('✅ تم تغليف autoFetchActiveBoxGlobal بمنطق التكثيف');
+      clearInterval(iv);
+    }
+    if(tries>100) clearInterval(iv);
+  },1000);
+
+  window.shouldFetchLiveForeground = shouldFetchLiveForeground;
+  window.getCurrentHijriDay = getHd;
+})();
+</script>
+
+</body>
