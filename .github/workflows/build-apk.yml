@@ -1,10 +1,8 @@
 name: Build APK
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,27 +12,22 @@ jobs:
         with: { node-version: 20 }
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
-      
       - run: npm install
       - run: npx cap add android || true
       - run: npx cap sync android
-      
       - name: Copy icon from root
         run: |
-          ICON=""
-          if [ -f ic_launcher.png ]; then ICON=ic_launcher.png
-          elif [ -f res-icons/icon-1024.png ]; then ICON=res-icons/icon-1024.png
-          elif [ -f res-icons/icon-512.png ]; then ICON=res-icons/icon-512.png
-          fi
-          if [ -n "$ICON" ]; then
-            echo "Using icon $ICON"
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p android/app/src/main/res/mipmap-$d
-              cp $ICON android/app/src/main/res/mipmap-$d/ic_launcher.png
-              cp $ICON android/app/src/main/res/mipmap-$d/ic_launcher_round.png
-            done
-          fi
-
+          ICON="ic_launcher.png"
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p android/app/src/main/res/mipmap-$d
+            cp $ICON android/app/src/main/res/mipmap-$d/ic_launcher.png
+            cp $ICON android/app/src/main/res/mipmap-$d/ic_launcher_round.png
+          done
+      - run: cd android && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Taqweem-Shamel-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
       - run: cd android && ./gradlew assembleDebug
       
       - uses: actions/upload-artifact@v4
