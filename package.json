@@ -1,0 +1,14 @@
+{
+  "name": "taqweem-shamel",
+  "version": "1.0.0",
+  "displayName": "التقويم الشامل",
+  "description": "التقويم الشامل 1.0 - الشيخ فضل زين الدين",
+  "author": "الشيخ فضل زين الدين",
+  "private": true,
+  "dependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/filesystem": "^6.0.1",
+    "@capacitor/share": "^6.0.1"
+  }
+}
